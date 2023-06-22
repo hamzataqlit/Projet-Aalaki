@@ -6,7 +6,7 @@ import { EnvelopeIcon } from "@heroicons/react/20/solid";
 // import { product } from "./productsData";
 async function getProducts(id) {
   const { data } = await axios.get(
-    `http://localhost:8080/api/products/${id}`
+    `http://localhost:8083/api/products/${id}`
   );
   return data.product;
 }

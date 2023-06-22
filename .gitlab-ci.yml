@@ -2,137 +2,122 @@ stages:
   - security
   - build
   - dckr_scan
-  - deploy
+  - k8s_deployment
 
 variables:
   DOCKER_HOST: tcp://docker:2375
-  DOCKER_DRIVER: overlay2
+  CI_COMMIT_REF_SLUG :  latest
 
 services:
   - docker:dind
 
-security-sast_product:
+.security_scan_template:
   stage: security
   image: node:14
+  script:
+    - echo "Running security scan sast"
+    - npm install
+    - npm audit --json > $SERVICE_NAME-service-security-report.json
+  artifacts:
+    paths:
+      - $SERVICE_NAME/$SERVICE_NAME-service-security-report.json
+
+security-sast_product:
+  extends: .security_scan_template
+  variables:
+    SERVICE_NAME: "product"
   before_script:
     - cd product
-  script:
-    - echo "Running security scan sast"
-    - npm install
-    - npm audit --json > product-service-security-report.json
-  artifacts:
-      paths:
-        - product/product-service-security-report.json
 
 security-sast_payment:
-  stage: security
-  image: node:14
+  extends: .security_scan_template
+  variables:
+    SERVICE_NAME: "payment"
   before_script:
     - cd payment
-  script:
-    - echo "Running security scan sast"
-    - npm install
-    - npm audit --json > payment-service-security-report.json
-  artifacts:
-      paths:
-        - payment/payment-service-security-report.json
 
 security-sast_order:
-  stage: security
-  image: node:14
+  extends: .security_scan_template
+  variables:
+    SERVICE_NAME: "order"
   before_script:
     - cd order
-  script:
-    - echo "Running security scan sast"
-    - npm install
-    - npm audit --json > order-service-security-report.json
-  artifacts:
-      paths:
-        - order/order-service-security-report.json
 
-security-sast_frontend:
-  stage: security
-  image: node:14
+security-sast_e-commerce:
+  extends: .security_scan_template
+  variables:
+    SERVICE_NAME: "fe-commerce"
   before_script:
     - cd e-commerce
-  script:
-    - echo "Running security scan sast"
-    - npm install
-    - npm audit --json > frontend-service-security-report.json || true
-  artifacts:
-      paths:
-        - e-commerce/frontend-service-security-report.json
 
 security-sca:
   stage: security
   script:
     - echo "Running security scan sca"
 
-product:
+.build_template:
   image: docker:latest
   stage: build
   before_script:
-    - cd product
+    - cd $SERVICE_NAME
   script:
-    - docker login -u abdel2307 -p dckr_pat_vTbok7FHVXxtAldm_iKsL8JcR7w
-    - docker build -t abdel2307/my-product .
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD 
+    - docker build -t $CI_REGISTRY_IMAGE/$SERVICE_NAME .
     - docker images
-    - docker push abdel2307/my-product
+    - docker push $CI_REGISTRY_IMAGE/$SERVICE_NAME .
 
+product:
+  extends: .build_template
+  variables:
+    SERVICE_NAME: "product"
+  
 
 payment:
-  image: docker:latest
-  stage: build
-  before_script:
-    - cd payment
-  script:
-    - docker login -u abdel2307 -p dckr_pat_vTbok7FHVXxtAldm_iKsL8JcR7w
-    - docker build -t abdel2307/my-payment .
-    - docker push abdel2307/my-payment
+  extends: .build_template
+  variables:
+    SERVICE_NAME: "payment"
+   
 
 order:
-  image: docker:latest
-  stage: build
-  before_script:
-    - cd order
-  script:
-    - docker login -u abdel2307 -p dckr_pat_vTbok7FHVXxtAldm_iKsL8JcR7w
-    - docker build -t abdel2307/my-order .
-    - docker push abdel2307/my-order
+  extends: .build_template
+  variables:
+    SERVICE_NAME: "order"
+   
 
-frontend:
-  image: docker:latest
-  stage: build
-  before_script:
-    - cd e-commerce
-  script:
-    - docker login -u abdel2307 -p dckr_pat_vTbok7FHVXxtAldm_iKsL8JcR7w
-    - docker build -t abdel2307/frontend_image .
-    - docker push abdel2307/frontend_image
+e-commerce:
+  extends: .build_template
+  variables:
+    SERVICE_NAME: "e-commerce"
+
+
 
 docker_scan:
   image: docker:latest
   stage: dckr_scan
   script:
-    - echo "Running dckr_scan "
-    #- docker login -u abdel2307 -p dckr_pat_vTbok7FHVXxtAldm_iKsL8JcR7w
-    #- docker scan --login
-    #- docker pull abdel2307/my-product
-    #- docker scan abdel2307/my-product
-    #- docker pull abdel2307/my-payment
-    #- docker scan abdel2307/my-payment
-    #- docker pull abdel2307/my-order
-    #- docker scan abdel2307/my-order
-    #- docker pull abdel2307/frontend_image
-    #- docker scan abdel2307/frontend_image
+    - echo "Running dckr_scan"
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD
+    - docker scan --login
+    - docker pull $CI_REGISTRY_USER/product
+    - docker scan $CI_REGISTRY_USER/product
+    - docker pull $CI_REGISTRY_USER/payment
+    - docker scan $CI_REGISTRY_USER/payment
+    - docker pull $CI_REGISTRY_USER/order
+    - docker scan $CI_REGISTRY_USER/order
+    - docker pull $CI_REGISTRY_USER/e-commerce
+    - docker scan $CI_REGISTRY_USER/e-commerce
 
 k8s_deployment:
   stage: deploy
   image:
     name: bitnami/kubectl:latest
     entrypoint: ['']
-  
   script:
+    - echo "Deploying to Kubernetes"
     - kubectl config get-contexts
-    - kubectl config use-context abdel230702/services:primary-agent
+    - kubectl config use-context yaya2345/services:primary-agent
     - kubectl apply -f ./release/kubernetes-manifests.yml
+
+
+
+
