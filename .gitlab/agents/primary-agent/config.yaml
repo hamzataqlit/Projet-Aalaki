@@ -1,0 +1,5 @@
+gitops:
+  manifest_projects:
+  - id: "abdel230702/services/"
+    paths: 
+    - glob: '/**/*.yaml'
